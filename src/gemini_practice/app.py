@@ -1,5 +1,3 @@
-## Invoice extractor
-
 import streamlit as st
 from google import genai
 from google.genai import errors
@@ -15,9 +13,26 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
 
-def response_from_model(prompt, image):
+def build_caption_prompt(style_prompt):
+    style_instruction = style_prompt.strip() if style_prompt else "friendly and engaging"
+
+    return f"""
+You are a social media caption writer.
+Look at the uploaded image and write one polished caption for it.
+
+Style guidance from the user:
+{style_instruction}
+
+Rules:
+- Return only the final caption text.
+- Do not return JSON, bounding boxes, object labels, coordinates, markdown, or analysis.
+- Keep it natural, concise, and ready to post.
+""".strip()
+
+
+def response_from_model(style_prompt, image):
     response = client.models.generate_content(
-        model=GEMINI_MODEL, contents=[prompt, image]
+        model=GEMINI_MODEL, contents=[build_caption_prompt(style_prompt), image]
     )
     return response.text
 
@@ -34,8 +49,9 @@ def input_image_setup(uploaded_file):
 
 st.set_page_config(page_title="Image caption generator")
 
-st.header("Gemini Application")
-input = st.text_input("Input prompt: ", key="input")
+st.title("Image Caption Generator")
+st.caption("Upload an image and generate a short, engaging caption with Gemini.")
+caption_style = st.text_input("Caption style or instruction:", key="caption_style")
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 image = ""
 if uploaded_file is not None:
@@ -44,9 +60,6 @@ if uploaded_file is not None:
 
 submit = st.button("Generate a caption")
 
-input_prompt = """You are an expert social media marketer and know how to generate a good content by giving attracting captions to the images 
- and you will have to answer questions based on the input image"""
-
 if submit:
     # image_data = input_image_setup(uploaded_file)
 
@@ -54,7 +67,7 @@ if submit:
         st.warning("Please upload an image first.")
     else:
         try:
-            response = response_from_model(input or input_prompt, image)
+            response = response_from_model(caption_style, image)
         except errors.ClientError as exc:
             if exc.status_code == 429:
                 st.error(
